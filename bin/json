@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import sys
+
+
+def die(message):
+    print(f"error: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def read_json():
+    try:
+        return json.load(sys.stdin)
+    except json.JSONDecodeError as e:
+        die(f"invalid JSON: {e}")
+
+
+def print_value(value):
+    if isinstance(value, str):
+        print(value)
+    elif value is None:
+        print("null")
+    elif isinstance(value, (dict, list)):
+        print(json.dumps(value, separators=(",", ":")))
+    else:
+        print(json.dumps(value))
+
+
+def get_field(obj, field):
+    if not isinstance(obj, dict):
+        die("get requires a JSON object")
+
+    if field not in obj:
+        die(f"field not found: {field}")
+
+    print_value(obj[field])
+
+
+def get_each(items, field):
+    if not isinstance(items, list):
+        die("each requires a JSON array")
+
+    for index, obj in enumerate(items):
+        if not isinstance(obj, dict):
+            die(f"array element {index} is not an object")
+
+        if field not in obj:
+            die(f"field not found in array element {index}: {field}")
+
+        print_value(obj[field])
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Extract fields from JSON read from standard input"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    get_parser = subparsers.add_parser(
+        "get", help="extract a field from a JSON object"
+    )
+    get_parser.add_argument("field")
+
+    each_parser = subparsers.add_parser(
+        "each", help="extract a field from each object in a JSON array"
+    )
+    each_parser.add_argument("field")
+
+    args = parser.parse_args()
+    data = read_json()
+
+    if args.command == "get":
+        get_field(data, args.field)
+    elif args.command == "each":
+        get_each(data, args.field)
+
+
+if __name__ == "__main__":
+    main()

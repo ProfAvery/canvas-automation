@@ -1,0 +1,159 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+mkdir -p "$canvas_cli_config_dir"
+chmod 0700 "$canvas_cli_config_dir"
+
+# These are prerequisites rather than things this script should install.
+command -v git >/dev/null 2>&1 ||
+    die "git is required but was not found in PATH"
+
+command -v python3 >/dev/null 2>&1 ||
+    die "python3 is required but was not found in PATH"
+
+"$bin_dir/ensure-canvas-cli"
+
+command -v canvas >/dev/null 2>&1 ||
+    die "Canvas CLI was installed but canvas is not available in PATH"
+
+printf 'Canvas CLI setup prerequisites satisfied.\n'
+printf '  %s\n' "$(git --version)"
+printf '  %s\n' "$(python3 --version)"
+printf '  %s\n' "$(canvas version)"
+
+instance_config_file="$repo_dir/etc/canvas-instances"
+
+[ -f "$instance_config_file" ] ||
+    die "missing $instance_config_file; copy etc/canvas-instances.example and edit it"
+
+"$bin_dir/ensure-private" "$instance_config_file"
+
+configured_instance_url()
+{
+    instance_name=$1
+
+    config_output=$(canvas config list) ||
+        die "could not read Canvas CLI configuration"
+
+    printf '%s\n' "$config_output" |
+        awk -v name="$instance_name" '
+            $1 == name {
+                print $2
+                exit
+            }
+        '
+}
+
+configure_instance()
+{
+    instance_name=$1
+    instance_url=$2
+
+    # canvas config add removes a trailing slash before storing the URL.
+    instance_url=${instance_url%/}
+
+    case "$instance_url" in
+        http://*|https://*)
+            ;;
+        *)
+            die "invalid Canvas URL for $instance_name: $instance_url"
+            ;;
+    esac
+
+    existing_url=$(configured_instance_url "$instance_name")
+
+    if [ -z "$existing_url" ]; then
+        printf 'Adding Canvas instance %s (%s)...\n' "$instance_name" "$instance_url"
+        canvas config add "$instance_name" --url "$instance_url"
+    elif [ "$existing_url" = "$instance_url" ]; then
+        printf 'Canvas instance %s already configured (%s).\n' "$instance_name" "$instance_url"
+    else
+        die "Canvas instance $instance_name is configured as $existing_url; expected $instance_url"
+    fi
+}
+
+configure_token()
+{
+    instance_name=$1
+    instance_url=$2
+    api_token=$3
+
+    printf 'Configuring authentication for Canvas instance %s...\n' "$instance_name"
+
+    canvas auth token set "$instance_name" --url "$instance_url" --token "$api_token"
+}
+
+check_authentication()
+{
+    instance_name=$1
+
+    if user=$(
+        canvas users me --instance "$instance_name" -o json 2>/dev/null
+    ); then
+        user_name=$(
+            printf '%s\n' "$user" |
+                "$bin_dir/json" get name
+        )
+
+        printf 'Canvas instance %s authenticated as %s.\n' "$instance_name" "$user_name"
+        return
+    fi
+
+    printf >&2 '\nCanvas instance %s is not authenticated.\n' "$instance_name"
+    printf >&2 'Check the URL and token for %s in %s, then run setup again.\n' "$instance_name" "$instance_config_file"
+
+    exit 1
+}
+
+while read -r instance_name instance_url api_token extra ||
+      [ -n "${instance_name:-}" ]; do
+    case "${instance_name:-}" in
+        ""|\#*)
+            continue
+            ;;
+    esac
+
+    case "$api_token" in
+        7~your-token-here|"")
+            die "Canvas token not configured for instance: $instance_name"
+            ;;
+    esac
+
+    [ -n "${instance_url:-}" ] ||
+        die "missing URL for Canvas instance: $instance_name"
+
+    [ -z "${extra:-}" ] ||
+        die "invalid Canvas instance entry: $instance_name $instance_url $extra"
+
+    configure_instance "$instance_name" "$instance_url"
+    configure_token "$instance_name" "$instance_url" "$api_token"
+    check_authentication "$instance_name"
+done < "$instance_config_file"
+
+canvas doctor
+
+if [ ! -f "$codex_config_file" ]; then
+    die "$repo_dir/.codex/config.toml is missing; run 'canvas agent guard --host codex' for the current guidance, then restore or update the project configuration"
+elif ! git -C "$repo_dir" diff --quiet HEAD -- .codex/config.toml; then
+    warn "$repo_dir/.codex/config.toml differs from the checked-in version; review the change before allowing Codex to modify Canvas"
+fi
+
+while read -r instance_name rest ||
+      [ -n "${instance_name:-}" ]; do
+    case "${instance_name:-}" in
+        ""|\#*)
+            continue
+            ;;
+    esac
+
+    printf '\nCanvas identity for %s:\n' "$instance_name"
+    canvas users me --instance "$instance_name"
+
+    printf '\nDashboard courses for %s:\n' "$instance_name"
+    canvas favorites courses list \
+        --instance "$instance_name" \
+        --columns id,name,workflow_state
+done < "$instance_config_file"

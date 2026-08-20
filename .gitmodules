@@ -1,0 +1,3 @@
+[submodule "vendor/canvas-cli"]
+	path = vendor/canvas-cli
+	url = https://github.com/jjuanrivvera/canvas-cli.git

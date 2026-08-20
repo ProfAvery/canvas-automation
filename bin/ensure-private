@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+import os
+import stat
+import sys
+
+
+def check(path):
+    try:
+        info = os.lstat(path)
+    except OSError as e:
+        print(f"error: {path}: {e.strerror}", file=sys.stderr)
+        return False
+
+    if stat.S_ISLNK(info.st_mode):
+        print(f"error: {path}: symbolic links are not allowed", file=sys.stderr)
+        return False
+
+    if not stat.S_ISREG(info.st_mode):
+        print(f"error: {path}: not a regular file", file=sys.stderr)
+        return False
+
+    mode = stat.S_IMODE(info.st_mode)
+
+    if mode & 0o077:
+        print(
+            f"error: {path}: permissions are {mode:04o}; "
+            f"group and other users must have no access",
+            file=sys.stderr,
+        )
+        print(f"       try: chmod 600 {path}", file=sys.stderr)
+        return False
+
+    return True
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(f"usage: {sys.argv[0]} FILE...", file=sys.stderr)
+        return 2
+
+    ok = True
+
+    for path in sys.argv[1:]:
+        if not check(path):
+            ok = False
+
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

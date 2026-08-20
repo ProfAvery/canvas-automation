@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+[ -d "$submodule_dir" ] ||
+    die "$submodule_dir not found; run git submodule update --init"
+
+git -C "$submodule_dir" describe --tags --exact-match HEAD 2>/dev/null ||
+    die "$submodule_dir is not checked out at an exact release tag"

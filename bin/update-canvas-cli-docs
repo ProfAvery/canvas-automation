@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+doc_file="$repo_dir/docs/canvas-cli-docs.md"
+tmp=$(mktemp "$repo_dir/docs/.canvas-cli-docs.XXXXXX")
+trap 'rm -f "$tmp"' 0 HUP INT TERM
+
+{
+    printf '# canvas-cli documentation snapshot\n\n'
+    printf 'Git commit: %s\n' "$(git -C "$submodule_dir" rev-parse HEAD)"
+    printf 'Generated: %s\n\n' "$(date '+%Y-%m-%d')"
+    npx --yes repomix@latest \
+      --include "skills/canvas-cli/SKILL.md,skills/canvas-cli/references/*.md,docs/tutorials/scripting.md,docs/best-practices.md,CHANGELOG.md" \
+      --style markdown \
+      --stdout \
+      "$submodule_dir"
+} > "$tmp"
+
+mv "$tmp" "$repo_dir/docs/canvas-cli-docs.md"

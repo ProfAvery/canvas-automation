@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+tag=$("$bin_dir/canvas-cli-release")
+
+printf 'Installing canvas-cli %s\n' "$tag"
+
+CANVAS_VERSION="$tag" sh "$submodule_dir/install.sh"

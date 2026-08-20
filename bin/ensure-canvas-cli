@@ -1,0 +1,51 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+expected_tag=$("$bin_dir/canvas-cli-release")
+expected_version=${expected_tag#v}
+
+installed_version()
+{
+    canvas version 2>/dev/null |
+        sed -n '1s/^canvas-cli //p'
+}
+
+current_version=
+
+if command -v canvas > /dev/null 2>&1; then
+    current_version=$(installed_version)
+fi
+
+if [ "$current_version" = "$expected_version" ]; then
+    exit 0
+fi
+
+if [ -n "$current_version" ]; then
+    printf 'Canvas CLI %s found; installing project version %s...\n' \
+        "$current_version" "$expected_version"
+else
+    printf 'Canvas CLI not found; installing project version %s...\n' \
+        "$expected_version"
+fi
+
+install_script="$bin_dir/install-canvas-cli"
+
+[ -f "$install_script" ] ||
+    die "installer not found: $install_script"
+
+if [ -d "$HOME/.local/bin" ]; then
+    INSTALL_DIR="$HOME/.local/bin" sh "$install_script"
+else
+    sh "$install_script"
+fi
+
+command -v canvas >/dev/null 2>&1 ||
+    die "Canvas CLI was installed but canvas is not available in PATH"
+
+current_version=$(installed_version)
+
+[ "$current_version" = "$expected_version" ] ||
+    die "Canvas CLI on PATH is $current_version; expected $expected_version"

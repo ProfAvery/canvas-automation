@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+. "$bin_dir/stdlib.sh"
+
+usage()
+{
+    printf 'usage: %s INSTANCE COMMAND [ARG...]\n' "$0" >&2
+    exit 2
+}
+
+[ "$#" -ge 2 ] || usage
+
+instance=$1
+shift
+
+[ -f "$instance_config_file" ] ||
+    die "missing $instance_config_file; copy etc/canvas-instances.example and edit it"
+
+"$bin_dir/ensure-private" "$instance_config_file"
+
+instance_url=
+api_token=
+
+while read -r name url token extra ||
+      [ -n "${name:-}" ]; do
+    case "${name:-}" in
+        ""|\#*)
+            continue
+            ;;
+    esac
+
+    [ -z "${extra:-}" ] ||
+        die "invalid entry for Canvas instance $name"
+
+    if [ "$name" = "$instance" ]; then
+        instance_url=$url
+        api_token=$token
+        break
+    fi
+done < "$instance_config_file"
+
+[ -n "$instance_url" ] ||
+    die "Canvas instance not found: $instance"
+
+[ -n "$api_token" ] ||
+    die "Canvas token not configured for instance: $instance"
+
+CANVAS_URL=$instance_url
+CANVAS_TOKEN=$api_token
+export CANVAS_URL CANVAS_TOKEN
+
+exec "$@"
