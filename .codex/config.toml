@@ -1,2 +1,14 @@
+# Use the least expensive capable model for routine Canvas automation
+model = "gpt-5.6-luna"
+model_reasoning_effort = "low"
+
+# Settings from canvas agent guard --host codex
 sandbox_mode    = "read-only"
 approval_policy = "untrusted"
+
+# Allow network access to Canvas
+[sandbox_workspace_write]
+network_access = true
+
+
+
