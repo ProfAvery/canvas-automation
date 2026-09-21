@@ -3,8 +3,12 @@ model = "gpt-5.6-luna"
 model_reasoning_effort = "low"
 
 # Settings from canvas agent guard --host codex
+# TODO: update this. See `approval_policy` below.
 sandbox_mode    = "read-only"
-approval_policy = "untrusted"
+
+# See <https://github.com/openai/codex/issues/39973>
+#approval_policy = "untrusted"
+approval_policy = "on-request"
 
 # Allow network access to Canvas
 [sandbox_workspace_write]
